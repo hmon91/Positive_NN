@@ -1,4 +1,4 @@
-# Positivity- and Stability-Preserving Sector Bounds for Neural-Network Controllers
+# Ensuring Both Positivity and Stability Using Sector-Bounded Nonlinearity for Systems with Neural Network Controllers
 
 Code accompanying:
 
