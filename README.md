@@ -1,0 +1,221 @@
+# Positivity- and Stability-Preserving Sector Bounds for Neural-Network Controllers
+
+Code accompanying:
+
+> H. Montazeri Hedesh and M. Siami, **"Ensuring Both Positivity and Stability
+> Using Sector-Bounded Nonlinearity for Systems with Neural Network
+> Controllers,"** *IEEE Control Systems Letters (L-CSS)*, vol. 8, pp. 1685–1690, 2024.
+> [arXiv:2406.12744](https://arxiv.org/abs/2406.12744) ·
+> [IEEE Xplore](https://ieeexplore.ieee.org/document/10561541)
+
+The paper gives a simple, scalable test for the **global exponential
+stability** of a linear time-invariant plant in feedback with a fully
+connected, bias-free feedforward neural network (FFNN) controller. The idea
+is to (i) bound the entire network by an elementwise **sector** derived from
+its weights, and then (ii) apply the **positive Aizerman conjecture**: if the
+lower sector matrix keeps the loop Metzler and the upper sector matrix keeps
+it Hurwitz, the closed loop is globally exponentially stable. The test costs
+microseconds and is independent of network depth.
+
+## Method in one screen
+
+For an FFNN controller `π` with weight matrices `W1, …, WL` (no biases) and a
+scalar activation lying in the sector `[a1, a2]`, let `c = max(|a1|, |a2|)`
+(so `c = 1` for `tanh` and `ReLU`). **Theorem 2** gives the sector bound
+
+```
+Γ2 =  c^(L-1) · |WL| · … · |W2| · |W1|
+Γ1 = -Γ2
+Γ1 · z  ≤  π(z)  ≤  Γ2 · z          for every z ≥ 0   (elementwise)
+```
+
+For the closed loop `ẋ = A x + B·π(C x)` with `B ≥ 0`, `C ≥ 0`, **Theorem 3**
+certifies global exponential stability when
+
+```
+A + B·Γ1·C   is Metzler   (off-diagonal entries ≥ 0)
+A + B·Γ2·C   is Hurwitz   (all eigenvalues have negative real part)
+```
+
+These two theorems are implemented in `matlab/sector_bound.m` and
+`matlab/verify_stability.m`; everything else is data generation, figures, and
+a training script.
+
+## Repository layout
+
+```
+positive-nn-sector-bounds/
+├── README.md
+├── LICENSE                        # MIT (edit the copyright line as needed)
+├── matlab/
+│   ├── sector_bound.m             # Theorem 2  — sector bound of the network
+│   ├── verify_stability.m         # Theorem 3  — Metzler + Hurwitz test
+│   ├── is_metzler.m               # helper
+│   ├── is_hurwitz.m               # helper
+│   ├── nn_forward.m               # evaluate a bias-free tanh FFNN (any depth)
+│   ├── load_weights.m             # load W1.csv, W2.csv, … from a folder
+│   ├── main_example.m             # plant + LQR expert + data gen + verify
+│   ├── fig_activation_sectors.m   # Figure 2  (tanh / ReLU sectors)
+│   ├── fig_sector_bound.m         # Figure 3  (bounds vs network output)
+│   ├── fig_closed_loop.m          # Figure 4  (trajectories, 50 ICs)
+│   └── benchmark_runtime.m        # Table I   (timing of the test)
+├── training/
+│   ├── train_nn.py                # Keras: imitate the expert, export weights
+│   └── requirements.txt
+├── baseline/                      # Table I comparison — IQC method [3]
+│   ├── README.md                  # prerequisites, how to run, results table
+│   └── iqc_reference/             # IQC code (MIT, from heyinUCB) + UPSTREAM_LICENSE
+└── data/
+    ├── weights/
+    │   ├── net_10_10_10_1/        # W1..W4 (2→10→10→10→1) — paper's example, certifies
+    │   ├── net_10_10_1/           # W1,W2,W3  (2→10→10→1)  — shallower snapshot
+    │   └── net_10_20_1/           # W1,W2,W3  (2→10→20→1)  — snapshot
+    └── training/
+        ├── lqr_states.csv, lqr_inputs.csv   # LQR expert data (2000 samples)
+        └── mpc_states.csv, mpc_inputs.csv   # MPC expert data (7100 samples)
+```
+
+## Quick start (MATLAB)
+
+No toolboxes are required for the core test; `main_example.m` uses `lqr`
+(Control System Toolbox) to build the expert controller.
+
+```matlab
+cd matlab
+main_example            % LQR expert, generate data, sector bound, stability test
+fig_activation_sectors  % Figure 2
+fig_sector_bound        % Figure 3
+fig_closed_loop         % Figure 4
+benchmark_runtime       % Table I timing
+```
+
+To test your own network, export its weights as `W1.csv, W2.csv, …` (row `i`
+of `Wi.csv` = one neuron's incoming weights, i.e. shape `n_i × n_{i-1}`) into
+a folder and point `load_weights` at it:
+
+```matlab
+W = load_weights('data/weights/net_10_10_10_1');
+[G1, G2] = sector_bound(W);                 % tanh / ReLU sector [0,1]
+[ok, info] = verify_stability(A, B, C, G1, G2);
+```
+
+## Training a controller (Python)
+
+`train_nn.py` fits a bias-free tanh network to the expert data and exports
+weights in the convention above.
+
+```bash
+cd training
+pip install -r requirements.txt
+python train_nn.py --hidden 10 15 15 \
+    --out ../data/weights/net_10_15_15_1 --epochs 500
+```
+
+`--hidden 10 15 15` builds the paper's 10/15/15/1 architecture (the trailing
+`1` output layer is added automatically). Then set `netDir` in the MATLAB
+scripts to `net_10_15_15_1`.
+
+## Data
+
+Two expert data sets are provided (states as `N × n_x`, inputs as `N × n_u`):
+
+- `lqr_*` — generated by `main_example.m` from an LQR expert (`Q = I`, `R = 1`);
+  this matches the paper's setup.
+- `mpc_*` — generated from a constrained-MPC expert; included as an alternative
+  and not needed to reproduce the paper.
+
+Weights: `net_10_10_10_1` is the network behind the paper's worked example (see
+below). `net_10_10_1` and `net_10_20_1` are two additional snapshots from the
+original project folder, kept to illustrate the method's behaviour.
+
+## Reproducibility notes (please read)
+
+On the plant `A = [-5 1; 3 -5]`, `B = [0.5; 1]`, `C = I`:
+
+- **`net_10_10_10_1` reproduces the paper's worked example and certifies.**
+  Its sector bound is `Γ2 = [0.8238, 1.1876]`, which gives
+  `A + B·Γ1·C = [-5.41 0.40; 2.17 -6.18]` (Metzler) and
+  `A + B·Γ2·C` Hurwitz with eigenvalues `(-6.69, -1.70)` — matching the
+  matrices and eigenvalues printed in the paper's example exactly, and the
+  closed loop converges to the origin. Running `main_example.m` prints
+  `CERTIFIED` with this network (it is the default `netDir`).
+
+  One caveat worth flagging: the paper's text reads `−Γ1 = Γ2 = [2.75, 1.47]`
+  for the example, but `[2.75, 1.47]` is the **10/15/15/1** value from Table I
+  and is *not* consistent with the example's own `A + B·Γ·C` matrices
+  (it would give eigenvalues `≈ (-0.42, -6.74)`, not `(-6.69, -1.70)`). The
+  example's matrices correspond to `Γ2 = [0.82, 1.19]` — i.e. this network. So
+  the certificate reproduces; the `[2.75, 1.47]` label in the prose appears to
+  be a slip carried over from the table. The example is also described as a
+  "10, 15, 15, 1" network, whereas these weights are `10/10/10/1` (three hidden
+  layers of 10) — worth reconciling in any revision.
+
+- `net_10_10_1` is a shallower snapshot; on this plant it does not satisfy the
+  conditions.
+- `net_10_20_1` is empirically stabilizing, but its bound `Γ2 ≈ [1.06, 3.80]`
+  is too loose to certify (`A + B·Γ1·C` not Metzler, `A + B·Γ2·C` not Hurwitz)
+  — a useful illustration of the conservatism the paper discusses.
+
+To reproduce the deeper **10/15/15/1** row of Table I, run
+`train_nn.py --hidden 10 15 15` on the LQR data and point `netDir` at the
+exported folder; with a well-trained imitation net the bound `Γ2 = ∏|Wi|`
+stays tight enough to certify.
+
+## Baseline comparison (Table I)
+
+Table I compares run-time against the IQC / quadratic-constraint method of
+
+> H. Yin, P. Seiler, M. Arcak, "Stability Analysis Using Quadratic Constraints
+> for Systems with Neural Network Controllers," *IEEE TAC*, 67(4):1980–1987, 2022.
+
+The IQC baseline code lives in [`baseline/`](baseline/). It is adapted from the
+authors' repository <https://github.com/heyinUCB/IQCbased_ImitationLearning>,
+which is **MIT-licensed**; the upstream license and an attribution notice are
+kept in `baseline/iqc_reference/`. That baseline needs CVX plus an SDP solver
+(e.g. MOSEK); see [`baseline/README.md`](baseline/README.md) for prerequisites,
+how to run it, and the full results table.
+
+| Method | Architecture | Computation time | Bound `−Γ₁ = Γ₂` |
+|--------|--------------|------------------|-------------------|
+| Sector bound + Metzler/Hurwitz (this repo) | 10/10/1    | 2.5 × 10⁻⁵ s | [2.65, 1.61] |
+| Sector bound + Metzler/Hurwitz (this repo) | 10/15/15/1 | 2.6 × 10⁻⁵ s | [2.75, 1.47] |
+| IQC method [3]                              | 10/10/1    | 0.68 s        | — (not reported) |
+| Product of norms [24]                       | 10/10/1    | —             | 5.83 |
+| Product of norms [24]                       | 10/15/15/1 | —             | 6.45 |
+
+The sector-bound timings come from `matlab/benchmark_runtime.m`; the IQC time is
+reproduced from the paper (it is an SDP solve, so it is hardware/solver-dependent
+and was not re-measured here). The product-of-norms bound [24] is a
+bound-tightness comparison, not a stability test, so no time is reported for it.
+
+## Figure / table map
+
+| Paper item | Script |
+|------------|--------|
+| Figure 2 (activation sectors) | `matlab/fig_activation_sectors.m` |
+| Figure 3 (bounds vs output)   | `matlab/fig_sector_bound.m` |
+| Figure 4 (closed-loop traj.)  | `matlab/fig_closed_loop.m` |
+| Table I (our test run-time)   | `matlab/benchmark_runtime.m` |
+| Table I (IQC baseline [3])    | `baseline/iqc_reference/iqc_roa_2d_example.m` |
+| Table I (results table)       | `baseline/README.md` |
+| Theorem 2 (sector bound)      | `matlab/sector_bound.m` |
+| Theorem 3 (stability test)    | `matlab/verify_stability.m` |
+
+## Citation
+
+```bibtex
+@article{montazerihedesh2024positivity,
+  author  = {Montazeri Hedesh, Hamidreza and Siami, Milad},
+  title   = {Ensuring Both Positivity and Stability Using Sector-Bounded
+             Nonlinearity for Systems with Neural Network Controllers},
+  journal = {IEEE Control Systems Letters},
+  volume  = {8},
+  pages   = {1685--1690},
+  year    = {2024}
+}
+```
+
+## License
+
+Released under the MIT License (see `LICENSE`). Update the copyright holders
+and year to match your preference before publishing.
