@@ -1,0 +1,21 @@
+# MATLAB
+*.asv
+*.mat
+slprj/
+octave-workspace
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Trained-weight scratch dirs (keep the curated ones under data/weights)
+data/weights/net_trained/
