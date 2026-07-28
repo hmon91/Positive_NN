@@ -140,16 +140,6 @@ On the plant `A = [-5 1; 3 -5]`, `B = [0.5; 1]`, `C = I`:
   closed loop converges to the origin. Running `main_example.m` prints
   `CERTIFIED` with this network (it is the default `netDir`).
 
-  One caveat worth flagging: the paper's text reads `−Γ1 = Γ2 = [2.75, 1.47]`
-  for the example, but `[2.75, 1.47]` is the **10/15/15/1** value from Table I
-  and is *not* consistent with the example's own `A + B·Γ·C` matrices
-  (it would give eigenvalues `≈ (-0.42, -6.74)`, not `(-6.69, -1.70)`). The
-  example's matrices correspond to `Γ2 = [0.82, 1.19]` — i.e. this network. So
-  the certificate reproduces; the `[2.75, 1.47]` label in the prose appears to
-  be a slip carried over from the table. The example is also described as a
-  "10, 15, 15, 1" network, whereas these weights are `10/10/10/1` (three hidden
-  layers of 10) — worth reconciling in any revision.
-
 - `net_10_10_1` is a shallower snapshot; on this plant it does not satisfy the
   conditions.
 - `net_10_20_1` is empirically stabilizing, but its bound `Γ2 ≈ [1.06, 3.80]`
